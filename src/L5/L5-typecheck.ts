@@ -232,8 +232,9 @@ export const typeofProgram = (exp: Program, tenv: TEnv): Result<TExp> => {
         const head = first(exps);
         const tail = rest(exps);
         if (isDefineExp(head))
-            return bind(typeofDefine(head, env), _ =>
-                processExps(tail, makeExtendTEnv([head.var.var], [head.var.texp], env)));
+            return isEmpty(tail) ? typeofDefine(head, env) :
+                bind(typeofDefine(head, env), _ =>
+                    processExps(tail, makeExtendTEnv([head.var.var], [head.var.texp], env)));
         return isEmpty(tail) ? typeofExp(head, env) :
                bind(typeofExp(head, env), _ => processExps(tail, env));
     };
