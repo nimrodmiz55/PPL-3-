@@ -78,9 +78,9 @@ export const expToPool = (exp: A.Exp): Pool => {
         A.isAtomicExp(e) ? extendPool(e, pool) :
         A.isProcExp(e) ? extendPool(e, reducePool(findVars, e.body, reducePoolVarDecls(extendPoolVarDecl, e.args, pool))) :
         A.isLitExp(e) && V.isEmptySExp(e.val) ?
-            pool : // HW3 3.3.a - fix this branch
+            extendPool(e, pool) :
         A.isLitExp(e) && V.isCompoundSExp(e.val) ?
-            pool : // HW3 3.3.a - fix this branch
+            extendPool(e, reducePool(findVars, [A.makeLitExp(e.val.val1), A.makeLitExp(e.val.val2)], pool)) :
         A.isCompoundExp(e) ? extendPool(e, reducePool(findVars, A.expComponents(e), pool)) :
         makeEmptyPool();
     return findVars(exp, makeEmptyPool());
@@ -139,9 +139,16 @@ export const makeEquationsFromExp = (exp: A.Exp, pool: Pool): Opt.Optional<Equat
                                 [makeEquation(left, T.makeProcTExp(R.map((vd) => vd. texp, exp.args), ret))])) :
     A.isLitExp(exp) ?
         (V.isEmptySExp(exp.val) ?
-            Opt.makeNone() : // HW3 3.3.b - fix this branch
+            Opt.mapv(inPool(pool, exp), (left: T.TExp) =>
+                [makeEquation(left, T.makeListTExp(T.makeFreshTVar()))]) :
         V.isCompoundSExp(exp.val) ?
-            Opt.makeNone() : // HW3 3.3.b - fix this branch
+            ((cse: V.CompoundSExp) =>
+                Opt.bind(inPool(pool, exp), (left: T.TExp) =>
+                    Opt.bind(inPool(pool, A.makeLitExp(cse.val1)), (headType: T.TExp) =>
+                        Opt.mapv(inPool(pool, A.makeLitExp(cse.val2)), (tailType: T.TExp) =>
+                            [makeEquation(left, T.makeListTExp(headType)),
+                             makeEquation(tailType, T.makeListTExp(headType))])))
+            )(exp.val) :
         isNumber(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
             [ makeEquation(left, T.makeNumTExp()) ]) :
         isBoolean(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
@@ -244,7 +251,7 @@ const solve = (equations: Equation[], sub: S.Sub): Res.Result<S.Sub> => {
 const canUnify = (eq: Equation): boolean =>
     T.isProcTExp(eq.left) && T.isProcTExp(eq.right) ?
         (eq.left.paramTEs.length === eq.right.paramTEs.length) :
-    // HW3 3.3.c - add missing branch
+    T.isListTExp(eq.left) && T.isListTExp(eq.right) ? true :
     false;
 
 // Signature: splitEquation(equation)
@@ -262,5 +269,6 @@ const splitEquation = (eq: Equation): Equation[] =>
         R.zipWith(makeEquation,
                   cons(eq.left.returnTE, eq.left.paramTEs),
                   cons(eq.right.returnTE, eq.right.paramTEs)) :
-    // HW3 3.3.d - add missing branch
+    (T.isListTExp(eq.left) && T.isListTExp(eq.right)) ?
+        [makeEquation(eq.left.itemTE, eq.right.itemTE)] :
     [];
